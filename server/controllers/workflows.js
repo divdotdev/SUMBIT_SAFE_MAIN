@@ -20,7 +20,7 @@ export function workflowsController(store, config, providers) {
     },
     createApplication: async (req, res) => {
       const loan = await store.one('LoanProduct', { _id: req.body.loanProductId });
-      if (!loan) throw new AppError(404, 'Loan product not found', 'NOT_FOUND');
+      if (!loan || loan.enabled === false) throw new AppError(404, 'Loan product is unavailable', 'NOT_FOUND');
       if (req.body.loanType !== loan.loanType) throw new AppError(400, 'loanType must match the selected product');
       if (req.body.loanAmount > loan.maxLoan || req.body.tenure > loan.maxTenureYears) throw new AppError(400, 'Amount or tenure exceeds product limits');
       if (req.body.consentId) await requireConsent(store, { userId: req.user._id, consentId: req.body.consentId, purpose: 'LENDER_DATA_SHARE', sharedWith: loan._id });
@@ -59,9 +59,13 @@ export function workflowsController(store, config, providers) {
     },
     requestAgent: async (req, res) => {
       const agent = await store.one('Agent', { _id: req.params.id });
-      if (!agent) throw new AppError(404, 'Agent not found', 'NOT_FOUND');
+      if (!agent || agent.demoVerification === 'Suspended') throw new AppError(404, 'Agent is unavailable', 'NOT_FOUND');
       await requireConsent(store, { userId: req.user._id, consentId: req.body.consentId, purpose: 'AGENT_ASSISTANCE', sharedWith: agent._id });
-      const request = await store.create('AgentRequest', { userId: req.user._id, agentId: agent._id, consentId: req.body.consentId, status: 'Requested', dataMode: config.appMode === 'MOCK' ? 'DEMO' : 'LIVE' });
+      const application = req.body.applicationId ? await owned(store, 'LoanApplication', req.body.applicationId, req.user._id) : null;
+      const loanProductId = req.body.loanProductId || application?.loanProductId;
+      if (application && loanProductId !== application.loanProductId) throw new AppError(400, 'Selected lender does not match application');
+      if (loanProductId) { const product = await store.one('LoanProduct', { _id: loanProductId }); if (!product || product.enabled === false) throw new AppError(404, 'Selected lender is unavailable'); }
+      const request = await store.create('AgentRequest', { userId: req.user._id, agentId: agent._id, consentId: req.body.consentId, ...(loanProductId ? { loanProductId } : {}), ...(application ? { applicationId: application._id } : {}), status: 'Requested', dataMode: config.appMode === 'MOCK' ? 'DEMO' : 'LIVE' });
       await audit(store, req.user._id, 'AGENT_REQUESTED', request._id);
       res.status(201).json({ request, message: config.appMode === 'MOCK' ? 'Sandbox assistance request saved. No agent has been contacted.' : 'Assistance request saved; dispatch is pending.' });
     },

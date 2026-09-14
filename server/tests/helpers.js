@@ -17,3 +17,5 @@ export const documentLines = {
   SALARY_SLIP: ['Salary Slip', 'Employee: Test Person', 'Employer: Demo Company', 'Month: March 2026', 'Gross Salary: INR 100000', 'Net Salary: INR 85000'],
   BANK_STATEMENT: ['Demo Bank', 'Account Statement', 'Account Holder: Test Person', 'Statement Period: 01/01/2026 to 31/03/2026', 'Opening Balance: INR 100000', 'Closing Balance: INR 150000'],
 };
+// Deliberately synthetic parser test strings; these are not issued identity documents.
+for (const lines of Object.values(documentLines)) lines.unshift('SYNTHETIC TEST FIXTURE - NOT A VALID DOCUMENT');

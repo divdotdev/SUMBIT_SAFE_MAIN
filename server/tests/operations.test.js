@@ -1,0 +1,97 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import request from 'supertest';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { getConfig } from '../config/index.js';
+import { Store } from '../services/store.js';
+import { createApp } from '../app.js';
+import { seed } from '../seed/data.js';
+import { signToken } from '../middleware/auth.js';
+import { pdf } from './helpers.js';
+import { homeDocumentLines, rahulProfile } from './homeFixtures.js';
+
+test('admin, partner and agent workflows preserve role, lender scope, consent and identity privacy', async t => {
+  const uploadDir=await fs.mkdtemp(path.join(os.tmpdir(),'submitsafe-operations-'));
+  const config={...getConfig({}),uploadDir};const store=new Store(config);await store.connect();await seed(store);
+  t.after(async()=>{await store.close();await fs.rm(uploadDir,{recursive:true,force:true});});
+  const api=request(createApp({config,store}));
+  const auth=async email=>({Authorization:`Bearer ${(await api.post('/api/auth/login').send({email,password:'Demo@123'}).expect(200)).body.token}`});
+  const user=await auth('rahul@submitsafe.in');const admin=await auth('admin@submitsafe.in');const partner=await auth('partner@submitsafe.in');
+  await api.get('/api/admin/metrics').expect(401);await api.get('/api/partner/leads').set(user).expect(403);await api.get('/api/admin/users').set(partner).expect(403);await api.get('/api/admin/users').set(user).expect(403);await api.get('/api/partner/leads').set(admin).expect(403);
+  await api.patch('/api/user/me').set(user).send({name:'Rahul Sharma',profile:{},role:'admin'}).expect(400);
+  const loans=(await api.get('/api/loans')).body.data;const loan=loans[0];
+  const docs=[];
+  for (const [documentType,lines] of Object.entries(homeDocumentLines)) {
+    const doc=(await api.post('/api/documents/upload').set(user).field('documentType',documentType).attach('file',pdf(lines),`${documentType}.pdf`).expect(201)).body.document;docs.push(doc);
+    const consent=(await api.post('/api/consents').set(user).send({purpose:'DOCUMENT_ANALYSIS',documentIds:[doc._id]}).expect(201)).body.consent;
+    const check=(await api.post(`/api/documents/${doc._id}/analyze`).set(user).send({consentId:consent._id}).expect(200)).body.analysis;
+    assert.equal(check.status,'passed',JSON.stringify(check));assert.ok(!JSON.stringify(check).includes('ABCDE1234F'));
+  }
+  const makeConsent=async(product,documentIds=docs.map(d=>d._id))=>(await api.post('/api/consents').set(user).send({purpose:'LENDER_DATA_SHARE',sharedWith:product._id,documentIds}).expect(201)).body.consent;
+  const makeApp=async(product,consent)=>(await api.post('/api/applications').set(user).send({loanProductId:product._id,loanType:product.loanType,loanAmount:2500000,tenure:20,...(consent?{consentId:consent._id}:{})}).expect(201)).body.application;
+  const noShare=await makeApp(loan);await api.get(`/api/partner/leads/${noShare._id}`).set(partner).expect(404);
+  const share=await makeConsent(loan);const app=await makeApp(loan,share);
+  const privateShare=await makeConsent(loan,[]);const noDocuments=await makeApp(loan,privateShare);
+  const limited=(await api.get(`/api/partner/leads/${noDocuments._id}`).set(partner).expect(200)).body.data;
+  assert.equal(limited.readinessScore,0);assert.equal(limited.documents.length,0);
+  const detail=(await api.get(`/api/partner/leads/${app._id}`).set(partner).expect(200)).body.data;
+  assert.equal(detail.applicant.name,'Rahul Sharma');assert.equal(detail.readinessScore,100);assert.equal(detail.documents.length,4);
+  for (const forbidden of ['maskedIdentifier','safeFileName','passwordHash','1998-06-15','ABCDE1234F','4821']) assert.ok(!JSON.stringify(detail).includes(forbidden),forbidden);
+  const table=(await api.get('/api/partner/leads').set(partner).expect(200)).body;
+  assert.equal(table.data.length,2);assert.ok(!JSON.stringify(table).includes('Rahul Sharma'));assert.equal(table.metrics['Average Readiness Score'],50);
+  const narrowPartner=await store.create('User',{name:'Scoped Demo Partner',email:'scoped@example.test',passwordHash:'test-unusable-hash',role:'partner',partnerProductIds:[loans[1]._id]});
+  const narrowAuth={Authorization:`Bearer ${signToken(narrowPartner,config)}`};
+  assert.equal((await api.get('/api/partner/leads').set(narrowAuth)).body.data.length,0);await api.get(`/api/partner/leads/${app._id}`).set(narrowAuth).expect(404);
+  await api.patch(`/api/partner/leads/${app._id}`).set(narrowAuth).send({action:'accept'}).expect(404);
+  await api.patch(`/api/partner/leads/${app._id}`).set(partner).send({action:'complete'}).expect(409);
+  await api.patch(`/api/partner/leads/${app._id}`).set(partner).send({action:'request-document'}).expect(400);
+  for (const action of ['accept','review','complete']) await api.patch(`/api/partner/leads/${app._id}`).set(partner).send({action}).expect(200);
+  assert.equal((await store.one('LoanApplication',{_id:app._id})).status,'Draft','Partner stage must not fabricate a lender submission');
+  await api.patch(`/api/partner/leads/${app._id}`).set(partner).send({action:'reject'}).expect(409);
+  await api.patch(`/api/consents/${share._id}/revoke`).set(user).expect(200);
+  await api.get(`/api/partner/leads/${app._id}`).set(partner).expect(404);await api.patch(`/api/partner/leads/${app._id}`).set(partner).send({action:'accept'}).expect(404);
+  assert.equal((await api.get('/api/partner/leads').set(partner)).body.data.length,1);
+  await api.post('/api/loans/match').set(user).send(rahulProfile).expect(200);
+  await api.post('/api/schemes/match').set(user).send({age:22,annualIncome:200000,employmentType:'student'}).expect(200);
+  const metrics=(await api.get('/api/admin/metrics').set(admin)).body.metrics;
+  assert.equal(metrics['Documents Checked'],4);assert.equal(metrics['Loan Searches'],1);assert.equal(metrics['Matched Users'],1);assert.equal(metrics['Scheme Matches'],1);
+  for (const section of ['users','applications','documents','loans','schemes','agents','consents','audit']) {
+    const body=(await api.get(`/api/admin/${section}`).set(admin).expect(200)).body;
+    for(const secret of ['passwordHash','safeFileName','ABCDE1234F']) assert.ok(!JSON.stringify(body).includes(secret));
+  }
+  const agent=(await api.get('/api/agents')).body.data[0];
+  const agentConsent=(await api.post('/api/consents').set(user).send({purpose:'AGENT_ASSISTANCE',sharedWith:agent._id}).expect(201)).body.consent;
+  const assistance=(await api.post(`/api/agents/${agent._id}/request`).set(user).send({consentId:agentConsent._id,loanProductId:loan._id,applicationId:app._id}).expect(201)).body.request;
+  assert.equal(assistance.loanProductId,loan._id);
+  await api.post(`/api/agents/${agent._id}/request`).set(user).send({consentId:agentConsent._id,applicationId:app._id,loanProductId:loans[1]._id}).expect(400);
+  for(const status of ['Accepted','Contacted','Documents Pending','Application Ready','Completed']) await api.patch(`/api/admin/agent-requests/${assistance._id}`).set(admin).send({status}).expect(200);
+  await api.patch(`/api/admin/agents/${agent._id}`).set(admin).send({demoVerification:'Demo verified'}).expect(200);
+  await api.patch(`/api/admin/agents/${agent._id}`).set(admin).send({demoVerification:'Suspended'}).expect(200);
+  await api.get(`/api/agents/${agent._id}`).expect(404);await api.post(`/api/agents/${agent._id}/request`).set(user).send({consentId:agentConsent._id}).expect(404);
+  await api.patch(`/api/admin/agent-requests/${assistance._id}`).set(admin).send({status:'Accepted'}).expect(409);
+  const live=request(createApp({config:{...config,appMode:'LIVE'},store}));await live.get('/api/partner/leads').set(partner).expect(403);await live.patch(`/api/admin/agents/${agent._id}`).set(admin).send({demoVerification:'Unverified'}).expect(403);
+});
+
+test('configured catalog management validates records and disable excludes new selections', async t=>{
+  const config=getConfig({});const store=new Store(config);await store.connect();await seed(store);t.after(()=>store.close());
+  const api=request(createApp({config,store}));const adminUser=await store.one('User',{email:'admin@submitsafe.in'});const admin={Authorization:`Bearer ${signToken(adminUser,config)}`};
+  const loan={name:'Configured Test Loan',loanType:'HOME',interestRateMin:8,interestRateMax:10,apr:9,processingFee:0.5,minIncome:20000,minAge:21,maxAge:70,maxTenureYears:30,maxLoan:10000000,recommendedCreditScore:700,employmentTypes:['salaried'],documentsRequired:['AADHAAR','PAN'],partnerStatus:'DEMO_NOT_PARTNERED',officialUrl:'https://example.test/product',enabled:true};
+  await api.post('/api/admin/loans').set(admin).send({...loan,officialUrl:'javascript:alert(1)'}).expect(400);
+  await api.post('/api/admin/loans').set(admin).send({...loan,officialUrl:'not-a-url'}).expect(400);
+  await api.post('/api/admin/loans').set(admin).send({...loan,name:'No source demo',officialUrl:''}).expect(201);
+  await api.post('/api/admin/loans').set(admin).send({...loan,dataMode:'LIVE'}).expect(400);
+  const created=(await api.post('/api/admin/loans').set(admin).send(loan).expect(201)).body.data;assert.equal(created.dataMode,'DEMO');
+  const owner=await store.one('User',{email:'rahul@submitsafe.in'});const ownerAuth={Authorization:`Bearer ${signToken(owner,config)}`};
+  await api.post('/api/applications').set(ownerAuth).send({loanProductId:created._id,loanType:'HOME',loanAmount:2500000,tenure:20}).expect(201);
+  await api.put(`/api/admin/loans/${created._id}`).set(admin).send({...loan,enabled:false}).expect(200);
+  assert.ok(!(await api.get('/api/loans')).body.data.some(l=>l._id===created._id));await api.get(`/api/loans/${created._id}`).expect(404);
+  await api.get(`/api/loans/${created._id}`).set(ownerAuth).expect(200);
+  await api.post('/api/applications').set(ownerAuth).send({loanProductId:created._id,loanType:'HOME',loanAmount:2500000,tenure:20}).expect(404);
+  assert.ok(!(await api.post('/api/loans/match').send(rahulProfile)).body.data.some(l=>l._id===created._id));
+  const scheme={name:'Configured Test Scheme',category:'Housing',description:'Fictional demo configuration',minAge:18,maxAge:70,maxAnnualIncome:500000,benefits:['Illustrative only'],documentsRequired:['Income proof'],employmentTypes:[],lastVerified:null,enabled:true};
+  const s=(await api.post('/api/admin/schemes').set(admin).send(scheme).expect(201)).body.data;
+  await api.put(`/api/admin/schemes/${s._id}`).set(admin).send({...scheme,enabled:false}).expect(200);await api.get(`/api/schemes/${s._id}`).expect(404);
+  await api.put(`/api/admin/schemes/${s._id}`).set(admin).send({...scheme,lastVerified:'2099-01-01'}).expect(400);
+});

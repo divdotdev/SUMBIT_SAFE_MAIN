@@ -7,7 +7,8 @@ export const documentTypes = ['AADHAAR', 'PAN', 'SALARY_SLIP', 'BANK_STATEMENT',
 const definitions = {
   User: {
     name: { type: String, required: true }, email: { type: String, required: true, unique: true, lowercase: true }, phone: String,
-    passwordHash: { type: String, required: true }, role: { type: String, enum: ['user', 'admin'], default: 'user' },
+    passwordHash: { type: String, required: true }, role: { type: String, enum: ['user', 'admin', 'partner'], default: 'user' },
+    partnerProductIds: [ref('LoanProduct')],
     profile: { dob: String, city: String, employmentType: String, monthlyIncome: Number },
   },
   LoanProduct: {
@@ -15,12 +16,14 @@ const definitions = {
     interestRateMin: Number, interestRateMax: Number, apr: Number, processingFee: Number, minIncome: Number,
     minAge: Number, maxAge: Number, maxTenureYears: Number, maxLoan: Number, recommendedCreditScore: Number,
     employmentTypes: [String], prepaymentCharges: String, features: [String], documentsRequired: [String], officialUrl: String,
-    partnerStatus: String, lastUpdated: Date,
+    partnerStatus: String, lastUpdated: Date, enabled: { type: Boolean, default: true },
   },
   LoanApplication: {
     userId: ref('User'), loanProductId: ref('LoanProduct'), loanType: String, loanAmount: Number, tenure: Number,
     status: { type: String, enum: statuses, default: 'Draft' }, readinessScore: Number, consentId: ref('Consent', false),
     applicationCode: { type: String, unique: true }, dataMode: String,
+    partnerStage: { type: String, enum: ['New', 'Accepted', 'Under Review', 'Documents Pending', 'Rejected', 'Completed'], default: 'New' },
+    partnerNote: String,
   },
   Document: {
     userId: ref('User'), documentType: { type: String, enum: documentTypes }, safeFileName: String,
@@ -42,12 +45,15 @@ const definitions = {
       statementPeriodDetected: Boolean, monthsCovered: Number },
   },
   Scheme: { name: String, slug: { type: String, unique: true }, category: String, description: String, minAge: Number,
-    maxAge: Number, maxAnnualIncome: Number, employmentTypes: [String], benefits: [String], documentsRequired: [String], dataMode: String },
-  Agent: { name: String, slug: { type: String, unique: true }, city: String, languages: [String], specialties: [String], dataMode: String, description: String },
+    maxAge: Number, maxAnnualIncome: Number, employmentTypes: [String], benefits: [String], documentsRequired: [String], dataMode: String,
+    ministry: String, eligibility: String, officialUrl: String, source: String, lastVerified: Date, enabled: { type: Boolean, default: true } },
+  Agent: { name: String, slug: { type: String, unique: true }, city: String, languages: [String], specialties: [String], dataMode: String, description: String,
+    demoVerification: { type: String, enum: ['Unverified', 'Demo verified', 'Suspended'], default: 'Unverified' } },
   Consent: { userId: ref('User'), purpose: { type: String, enum: purposes }, documentIds: [ref('Document')],
     sharedWith: String, version: String, timestamp: Date, revokedAt: { type: Date, default: null } },
   AuditLog: { userId: ref('User', false), action: String, resourceId: String, timestamp: Date },
-  AgentRequest: { userId: ref('User'), agentId: ref('Agent'), consentId: ref('Consent'), status: String, dataMode: String },
+  AgentRequest: { userId: ref('User'), agentId: ref('Agent'), consentId: ref('Consent'), status: String, dataMode: String,
+    loanProductId: ref('LoanProduct', false), applicationId: ref('LoanApplication', false) },
 };
 export const models = Object.fromEntries(Object.entries(definitions).map(([name, definition]) => {
   const schema = new Schema(definition, { timestamps: true, strict: 'throw' });
