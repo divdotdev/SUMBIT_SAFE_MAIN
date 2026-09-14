@@ -8,7 +8,7 @@ export const profile = z.object({
   dob: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v => { const d = new Date(v); return Number.isFinite(+d) && d.toISOString().slice(0, 10) === v && d <= new Date() && +v.slice(0, 4) >= 1900; }, 'Invalid date of birth').optional(),
   city: safeText.optional(), employmentType: z.enum(['salaried', 'self-employed', 'business', 'student', 'farmer', 'unemployed', 'other']).optional(), monthlyIncome: income.optional(),
 }).strict();
-export const matchInput = z.object({ name: safeText.optional(), age: z.number().int().min(18).max(100), city: safeText.optional(),
+export const matchInput = z.object({ loanType: z.enum(['HOME', 'EDUCATION']).default('HOME'), name: safeText.optional(), age: z.number().int().min(18).max(100), city: safeText.optional(),
   employmentType: z.enum(['salaried', 'self-employed', 'business', 'student', 'farmer', 'unemployed', 'other']),
   monthlyIncome: income.optional(), annualIncome: income.optional(), existingEmi: income.default(0),
   loanAmount: z.number().positive().max(1e10), tenureYears: z.number().int().min(1).max(40),

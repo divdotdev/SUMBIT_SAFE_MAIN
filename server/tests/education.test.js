@@ -1,0 +1,102 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import request from 'supertest';
+import { getConfig } from '../config/index.js';
+import { Store } from '../services/store.js';
+import { createApp } from '../app.js';
+import { seed } from '../seed/data.js';
+import { analyzeText } from '../services/documentAnalysis.js';
+import { compareField, normalizeDate } from '../services/evidence.js';
+import { pdf } from './helpers.js';
+import { educationDocumentLines, educationProfile } from './educationFixtures.js';
+
+test('normalized evidence separates extraction from source verification and compares variations', () => {
+  const user = { name: 'Riya Sharma', profile: { dob: '2003-06-15' } };
+  for (const type of ['AADHAAR', 'PAN', 'DRIVING_LICENCE']) {
+    const r = analyzeText({ text: educationDocumentLines[type].join('\n'), documentType: type, user, confidence: 95 });
+    assert.equal(r.evidence.sourceVerification.status, 'SOURCE_NOT_VERIFIED');
+    assert.equal(r.evidence.fields.dob, '2003-06-15');
+    assert.equal(r.evidence.fields.identifierFormatValid, true);
+    assert.equal(r.evidence.fields.name, 'Riya Sharma');
+  }
+  const spaced = analyzeText({ text: 'Income Tax PAN\nName: Riya Sharma\nDOB: 15/06/2003\na b c d e 1 2 3 4 f', documentType: 'PAN', user, confidence: 95 });
+  assert.equal(spaced.maskedIdentifier, 'ABCDE****F'); assert.equal(spaced.status, 'passed');
+  const qr = analyzeText({text:'QR detected Government of India Aadhaar',documentType:'AADHAAR',user,confidence:99});
+  assert.equal(qr.evidence.sourceVerification.status,'SOURCE_NOT_VERIFIED'); assert.equal(qr.documentDetected,false);
+  assert.equal(compareField('Riya Sharma','Riya Sharma','name'),'MATCH');
+  assert.equal(compareField('Riya Sharma','Riya S Sharma','name'),'POSSIBLE_MATCH');
+  assert.equal(compareField('Riya Sharma','Other Person','name'),'MISMATCH');
+  assert.equal(compareField(null,'Riya Sharma','name'),'UNCERTAIN');
+  assert.equal(compareField('12 Demo Road Delhi','12 Demo Road Delhi','address'),'MATCH');
+  assert.equal(compareField('12 Demo Road Delhi','14 Example Lane Delhi','address'),'UNCERTAIN');
+  assert.equal(normalizeDate('31/02/2003'),null);
+  assert.equal(normalizeDate('15/06/2003'),'2003-06-15');
+  const wrongPan=analyzeText({text:'Income Tax PAN\nName: Riya Sharma\nDOB: 15/06/2003\nABCDE123F',documentType:'PAN',user,confidence:95});
+  assert.equal(wrongPan.evidence.fields.identifierFormatValid,false);
+  const expired=analyzeText({text:educationDocumentLines.DRIVING_LICENCE.join('\n').replace('01/01/2036','01/01/2020'),documentType:'DRIVING_LICENCE',user,confidence:95});
+  assert.equal(expired.status,'warning');assert.ok(expired.warnings.some(w=>w.includes('validity date')));
+  const incompleteFees=analyzeText({text:educationDocumentLines.FEE_SCHEDULE.filter(s=>!s.startsWith('Total Fee:')).join('\n'),documentType:'FEE_SCHEDULE',user,confidence:95});
+  assert.equal(incompleteFees.status,'warning');
+  const unreadable=analyzeText({documentType:'DRIVING_LICENCE',user});
+  assert.equal(unreadable.status,'manual_review');assert.equal(unreadable.evidence.extraction.status,'UNAVAILABLE');
+});
+
+test('education API: mapping, missing evidence, product scope, conflicts, profile correction and application gates', async t => {
+  const uploadDir=await fs.mkdtemp(path.join(os.tmpdir(),'submitsafe-education-'));
+  const config={...getConfig({}),uploadDir};const store=new Store(config);await store.connect();await seed(store);
+  t.after(async()=>{await store.close();await fs.rm(uploadDir,{recursive:true,force:true});});
+  const api=request(createApp({config,store}));
+  const registration=(await api.post('/api/auth/register').send({name:'Riya Sharma',email:'riya@example.test',password:'Password1!',profile:{dob:'2003-06-15'}}).expect(201)).body;
+  const auth={Authorization:`Bearer ${registration.token}`};
+  const products=(await api.get('/api/loans?loanType=EDUCATION').expect(200)).body.data;
+  assert.equal(products.length,3);assert.ok(products.every(p=>p.loanType==='EDUCATION'&&p.dataMode==='DEMO'));
+  const matches=(await api.post('/api/loans/match').send(educationProfile).expect(200)).body.data;
+  assert.equal(matches.length,3);assert.equal(matches[0].matchScore,100);
+  await api.post('/api/loans/compare').send({loanProductIds:products.slice(0,2).map(p=>p._id),profile:educationProfile}).expect(200);
+  const schemes=(await api.post('/api/schemes/match').send({loanType:'EDUCATION',age:23,annualIncome:300000,employmentType:'student'}).expect(200)).body.data;
+  assert.equal(schemes.length,4);assert.ok(schemes.some(s=>s.meetsConfiguredCriteria));
+  const readiness=async(productId)=> (await api.get(`/api/documents/readiness?loanType=EDUCATION${productId?`&productId=${productId}`:''}`).set(auth).expect(200)).body;
+  assert.equal((await readiness()).finalState,'NOT READY');
+  await api.get('/api/documents/readiness?loanType=EDUCATION&productId=bad').set(auth).expect(400);
+  await api.get(`/api/documents/readiness?loanType=HOME&productId=${products[0]._id}`).set(auth).expect(400);
+  const application=(await api.post('/api/applications').set(auth).send({loanProductId:products[0]._id,loanType:'EDUCATION',loanAmount:500000,tenure:10}).expect(201)).body.application;
+  assert.match(application.applicationCode,/^SS-EDUCATION-/);
+  await api.patch(`/api/applications/${application._id}/status`).set(auth).send({status:'Ready'}).expect(409);
+  async function upload(type,lines) {
+    const doc=(await api.post('/api/documents/upload').set(auth).field('documentType',type).attach('file',pdf(lines),`${type}.pdf`).expect(201)).body.document;
+    const consent=(await api.post('/api/consents').set(auth).send({purpose:'DOCUMENT_ANALYSIS',documentIds:[doc._id]}).expect(201)).body.consent;
+    const analysis=(await api.post(`/api/documents/${doc._id}/analyze`).set(auth).send({consentId:consent._id}).expect(200)).body.analysis;
+    return {doc,analysis};
+  }
+  for(const [type,lines] of Object.entries(educationDocumentLines)) if(type!=='DRIVING_LICENCE') await upload(type,lines);
+  let ready=await readiness();assert.equal(ready.finalState,'READY FOR LENDER REVIEW',JSON.stringify(ready));
+  assert.equal(ready.mappings.find(m=>m.id==='identity').result,'PASS WITH VERIFICATION LIMITATION');
+  assert.equal(ready.mappings.find(m=>m.id==='pan').result,'PASS');
+  assert.equal((await readiness(products[2]._id)).finalState,'NOT READY');
+  await upload('DRIVING_LICENCE',educationDocumentLines.DRIVING_LICENCE.map(s=>s.replace('Riya Sharma','Riya S Sharma')));
+  ready=await readiness();assert.equal(ready.finalState,'REVIEW REQUIRED');
+  assert.ok(ready.consistency.some(c=>c.status==='POSSIBLE_MATCH'));
+  await api.patch(`/api/applications/${application._id}/status`).set(auth).send({status:'Ready'}).expect(409);
+  const {doc}=await upload('DRIVING_LICENCE',educationDocumentLines.DRIVING_LICENCE);
+  assert.equal((await readiness(products[2]._id)).finalState,'READY FOR LENDER REVIEW');
+  const outsider=(await api.post('/api/auth/register').send({name:'Other Person',email:'other-edu@example.test',password:'Password1!'}).expect(201)).body;
+  await api.get(`/api/documents/${doc._id}`).set({Authorization:`Bearer ${outsider.token}`}).expect(404);
+  const outsiderReady=(await api.get('/api/documents/readiness?loanType=EDUCATION').set({Authorization:`Bearer ${outsider.token}`}).expect(200)).body;
+  assert.equal(outsiderReady.finalState,'INSUFFICIENT INFORMATION');
+  await api.patch(`/api/applications/${application._id}/status`).set(auth).send({status:'Ready'}).expect(200);
+  await api.patch(`/api/applications/${application._id}/status`).set(auth).send({status:'Submitted'}).expect(403);
+  const share=(await api.post('/api/consents').set(auth).send({purpose:'LENDER_DATA_SHARE',sharedWith:products[0]._id}).expect(201)).body.consent;
+  await api.patch(`/api/applications/${application._id}/status`).set(auth).send({status:'Submitted',consentId:share._id}).expect(200);
+  await upload('PAN',educationDocumentLines.PAN.map(s=>s.replace('15/06/2003','16/06/2003')));
+  assert.equal((await readiness()).finalState,'REVIEW REQUIRED');
+  // Most recent bad replacement must never be hidden by a previous passing PAN.
+  await upload('PAN',['Unreadable unrelated text']);
+  assert.equal((await readiness()).mappings.find(m=>m.id==='pan').result,'REVIEW');
+  await api.patch('/api/user/me').set(auth).send({name:'Corrected Name',profile:{dob:'2003-06-15'}}).expect(200);
+  assert.equal((await api.get(`/api/documents/${doc._id}`).set(auth).expect(200)).body.analysis,null);
+  assert.notEqual((await readiness()).finalState,'READY FOR LENDER REVIEW');
+  await api.patch('/api/user/me').set(auth).send({name:'1234 5678 9012',profile:{}}).expect(400);
+});

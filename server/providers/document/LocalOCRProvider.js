@@ -21,7 +21,7 @@ export class LocalOCRProvider extends DocumentProvider {
           const pdf = await task.promise;
           for (let i = 1; i <= Math.min(pdf.numPages, 30) && text.length < 200000; i += 1) {
             const page = await pdf.getPage(i); const content = await page.getTextContent();
-            text += content.items.map(item => item.str || '').join(' ') + '\n'; page.cleanup();
+            text += content.items.map(item => (item.str || '') + (item.hasEOL ? '\n' : ' ')).join('') + '\n'; page.cleanup();
           }
           text = text.slice(0, 200000); confidence = text.trim() ? 90 : 0;
           if (pdf.numPages > 30) warnings.push('Only the first 30 pages were analyzed');
@@ -39,6 +39,6 @@ export class LocalOCRProvider extends DocumentProvider {
       } else warnings.push('Local OCR is disabled; manual review is required');
     } catch { warnings.push('Text extraction could not be completed; provide a readable document for manual review'); }
     finally { this.busy = false; }
-    return analyzeText({ text, confidence, documentType: document.documentType, user, warnings });
+    return analyzeText({ text, confidence, documentType: document.documentType, user, warnings, extractionMethod: document.mimeType === 'application/pdf' ? 'PDF_TEXT' : 'LOCAL_OCR' });
   }
 }

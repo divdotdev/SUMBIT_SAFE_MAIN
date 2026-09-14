@@ -9,7 +9,7 @@ export function matchLoan(loan, input) {
   check(input.age >= loan.minAge && input.age <= loan.maxAge && input.age + input.tenureYears <= loan.maxAge, 15, 'Age and age at maturity fit the demo range', 'Age or age at maturity falls outside the demo range');
   check(input.loanAmount <= loan.maxLoan && input.tenureYears <= loan.maxTenureYears, 20, 'Amount and tenure fit the demo limits', 'Amount or tenure exceeds the demo limits');
   check(credit >= loan.recommendedCreditScore, 20, 'Self-reported credit score meets the demo guideline', 'Credit score is unknown or below the demo guideline');
-  check(['salaried', 'self-employed', 'business'].includes(input.employmentType), 10, 'Employment type fits the demo product', 'Employment requires further review');
+  check((loan.employmentTypes?.length ? loan.employmentTypes : ['salaried', 'self-employed', 'business']).includes(input.employmentType), 10, 'Employment type fits the demo product', 'Employment requires further review');
   check(income > 0 && ((input.existingEmi || 0) + emi) / income <= 0.5, 5, 'Estimated total EMI is within 50% of income', 'Estimated total EMI exceeds 50% of income');
   return { ...loan, matchScore, reasons, warnings, approxMonthlyEmi: emi, potentialMatch: matchScore >= 70,
     disclaimer: 'Illustrative demo match only. Rates are not current quotations and this is not loan approval.' };
@@ -20,5 +20,5 @@ export function matchScheme(scheme, input) {
   const income = input.annualIncome ?? input.monthlyIncome * 12;
   if (income <= scheme.maxAnnualIncome) { matchScore += 40; reasons.push('Income fits the demo threshold'); } else warnings.push('Income exceeds demo threshold');
   if (!scheme.employmentTypes.length || scheme.employmentTypes.includes(input.employmentType)) { matchScore += 30; reasons.push('Profile fits the demo category'); } else warnings.push('Profile requires eligibility review');
-  return { ...scheme, matchScore, reasons, warnings };
+  return { ...scheme, matchScore, reasons, warnings, meetsConfiguredCriteria: matchScore === 100 };
 }

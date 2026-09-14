@@ -9,6 +9,16 @@ export const lenders = ['HDFC', 'SBI', 'ICICI', 'Axis', 'Kotak', 'Bank of Baroda
   documentsRequired: ['AADHAAR', 'PAN', 'SALARY_SLIP', 'BANK_STATEMENT'], officialUrl: null,
   partnerStatus: 'DEMO_NOT_PARTNERED', lastUpdated: new Date('2026-01-01T00:00:00Z'),
 }));
+export const educationLenders = ['Learning Bank', 'Campus Finance', 'Study Credit'].map((name, index) => ({
+  name: `${name} Demo Education Loan`, slug: `education-demo-${index + 1}`, loanType: 'EDUCATION', dataMode: 'DEMO',
+  interestRateMin: 9 + index * 0.5, interestRateMax: 12 + index, apr: 10 + index * 0.5,
+  processingFee: 0.5, minIncome: 10000 + index * 5000, minAge: 18, maxAge: 65, maxTenureYears: 15,
+  maxLoan: 2000000 + index * 500000, recommendedCreditScore: 650, employmentTypes: ['student', 'salaried'],
+  prepaymentCharges: 'Fictional demo terms; no live lender quotation',
+  features: ['Fictional education product', 'Simplified applicant-income rule; co-applicant underwriting is not implemented', 'EMI starts immediately in this illustration; no moratorium modeled'],
+  documentsRequired: [...(index === 2 ? ['DRIVING_LICENCE'] : ['AADHAAR']), 'PAN', 'SALARY_SLIP', 'BANK_STATEMENT', 'ADMISSION_LETTER', 'FEE_SCHEDULE'],
+  officialUrl: null, partnerStatus: 'DEMO_NOT_PARTNERED', lastUpdated: new Date('2026-01-01T00:00:00Z'),
+}));
 const schemeSpecs = [
   ['Student Tuition Support', 'Education', ['student'], 16, 35],
   ['Higher Studies Support', 'Education', ['student'], 18, 40],
@@ -40,7 +50,7 @@ export const agents = ['Delhi', 'Mumbai', 'Bengaluru', 'Chennai', 'Hyderabad', '
 }));
 export async function seed(store) {
   if (store.config.appMode !== 'MOCK') throw new Error('Demo seeding is disabled in LIVE mode');
-  for (const [model, records] of [['LoanProduct', lenders], ['Scheme', schemes], ['Agent', agents]]) {
+  for (const [model, records] of [['LoanProduct', [...lenders, ...educationLenders]], ['Scheme', schemes], ['Agent', agents]]) {
     for (const record of records) if (!await store.one(model, { slug: record.slug })) await store.create(model, record);
   }
   if (!await store.one('User', { email: 'demo@submitsafe.in' })) await store.create('User', {

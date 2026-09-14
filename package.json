@@ -34,5 +34,9 @@
   "devDependencies": {
     "@napi-rs/canvas": "^1.0.9",
     "supertest": "^7.1.0"
+  },
+  "allowScripts": {
+    "bcrypt@6.0.0": true,
+    "tesseract.js@6.0.1": true
   }
 }

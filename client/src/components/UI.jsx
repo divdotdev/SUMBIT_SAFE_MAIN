@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, ArrowLeft, Check, AlertCircle, LoaderCircle, ShieldCheck, X, FileText, CircleHelp, ChevronRight } from 'lucide-react';
 export const money = value => value == null ? '—' : new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(value);
 export const date = value => value ? new Date(value).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Not provided';
-export const docNames = { AADHAAR: 'Aadhaar', PAN: 'PAN card', SALARY_SLIP: 'Salary slip', BANK_STATEMENT: 'Bank statement' };
+export const docNames = { AADHAAR: 'Aadhaar', PAN: 'PAN card', SALARY_SLIP: 'Salary slip', BANK_STATEMENT: 'Bank statement', DRIVING_LICENCE: 'Driving Licence', ADMISSION_LETTER: 'Admission letter', FEE_SCHEDULE: 'Fee schedule' };
 export const occupations = [['salaried', 'Salaried'], ['self-employed', 'Self-employed'], ['business', 'Business owner'], ['student', 'Student'], ['farmer', 'Farmer'], ['unemployed', 'Not currently working'], ['other', 'Other']];
 export function Button({ to, children, variant = 'primary', busy, disabled, className = '', arrow = false, ...props }) {
   const classes = `button button-${variant} ${className}`;

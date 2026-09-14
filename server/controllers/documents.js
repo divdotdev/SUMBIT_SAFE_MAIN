@@ -30,6 +30,10 @@ export function documentsController(store, config, providers) {
       await audit(store, req.user._id, 'DOCUMENT_UPLOAD', document._id);
       res.status(201).json({ document: publicDocument(document) });
     },
+    detail: async (req, res) => {
+      const document = await owned(store, 'Document', req.params.id, req.user._id);
+      res.json({ document: publicDocument(document), analysis: await store.one('DocumentAnalysis', { documentId: document._id }) });
+    },
     list: async (req, res) => res.json({ data: (await store.find('Document', { userId: req.user._id })).map(publicDocument) }),
     analyze: async (req, res) => {
       const document = await owned(store, 'Document', req.params.id, req.user._id);
@@ -43,6 +47,12 @@ export function documentsController(store, config, providers) {
       await audit(store, req.user._id, 'DOCUMENT_ANALYSIS', document._id);
       res.json({ analysis });
     },
-    readiness: async (req, res) => res.json(await overallReadiness(store, req.user._id)),
+    readiness: async (req, res) => {
+      const query = z.object({ loanType: z.enum(['HOME', 'EDUCATION']).optional(), productId: z.string().regex(/^[a-f\d]{24}$/i).optional() }).strict().parse(req.query);
+      const product = query.productId ? await store.one('LoanProduct', { _id: query.productId }) : null;
+      if (query.productId && !product) throw new AppError(404, 'Loan product not found');
+      if (product && query.loanType && query.loanType !== product.loanType) throw new AppError(400, 'Loan type does not match product');
+      res.json(await overallReadiness(store, req.user._id, { loanType: product?.loanType || query.loanType, product }));
+    },
   };
 }
