@@ -3,7 +3,7 @@ const { Schema } = mongoose;
 const ref = (name, required = true) => ({ type: Schema.Types.ObjectId, ref: name, required });
 export const statuses = ['Draft', 'Documents Pending', 'Ready', 'Submitted', 'Under Review', 'Completed'];
 export const purposes = ['DOCUMENT_ANALYSIS', 'LENDER_DATA_SHARE', 'AGENT_ASSISTANCE', 'SCHEME_DOCUMENT_CHECK'];
-export const documentTypes = ['AADHAAR', 'PAN', 'SALARY_SLIP', 'BANK_STATEMENT'];
+export const documentTypes = ['AADHAAR', 'PAN', 'SALARY_SLIP', 'BANK_STATEMENT', 'DRIVING_LICENCE', 'ADMISSION_LETTER', 'FEE_SCHEDULE'];
 const definitions = {
   User: {
     name: { type: String, required: true }, email: { type: String, required: true, unique: true, lowercase: true }, phone: String,
@@ -14,7 +14,7 @@ const definitions = {
     name: String, slug: { type: String, unique: true }, loanType: String, dataMode: { type: String, enum: ['DEMO', 'LIVE'] },
     interestRateMin: Number, interestRateMax: Number, apr: Number, processingFee: Number, minIncome: Number,
     minAge: Number, maxAge: Number, maxTenureYears: Number, maxLoan: Number, recommendedCreditScore: Number,
-    prepaymentCharges: String, features: [String], documentsRequired: [String], officialUrl: String,
+    employmentTypes: [String], prepaymentCharges: String, features: [String], documentsRequired: [String], officialUrl: String,
     partnerStatus: String, lastUpdated: Date,
   },
   LoanApplication: {
@@ -32,6 +32,11 @@ const definitions = {
     nameDetected: Boolean, nameMatch: { type: Boolean, default: null }, dobDetected: Boolean, dobMatch: { type: Boolean, default: null },
     identifierDetected: Boolean, maskedIdentifier: String, confidence: Number, warnings: [String], recommendations: [String],
     readinessScore: Number, dataMode: String, verificationMode: String, status: String, disclaimer: String,
+    evidence: { schemaVersion: String, documentType: String, recognition: { status: String }, extraction: { status: String, method: String },
+      consistency: { name: String, dob: String },
+      fields: { name: String, dob: String, address: String, maskedIdentifier: String, identifierFormatValid: { type: Boolean, default: null }, issueDate: String, validUntil: String, vehicleClass: String, institution: String, course: String, totalFee: Number },
+      sourceVerification: { status: { type: String, enum: ['SOURCE_VERIFIED', 'SOURCE_NOT_VERIFIED', 'VERIFICATION_FAILED', 'NOT_AVAILABLE'] }, provider: String, explanation: String },
+      provenance: { method: String, origin: String } },
     extractedFields: { employeeDetected: Boolean, employerDetected: Boolean, monthDetected: Boolean,
       grossSalary: Number, netSalary: Number, bankNameDetected: Boolean, accountHolderDetected: Boolean,
       statementPeriodDetected: Boolean, monthsCovered: Number },

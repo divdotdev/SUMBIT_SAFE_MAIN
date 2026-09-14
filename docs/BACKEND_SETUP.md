@@ -17,7 +17,7 @@ The API listens on `http://localhost:5000`. `npm start` runs without watch mode.
 
 Default `APP_MODE=MOCK` and `MOCK_DATABASE=MEMORY` work with all the supplied dummy values. **No attempt is made to contact the dummy Mongo URI, SMS service or provider URLs.** Memory mode validates records with the same Mongoose schemas but loses records on restart. It automatically seeds each server process. Running the seed command separately in MEMORY mode validates/seeds only that command's ephemeral database; it does not persist data for the server.
 
-Demo account: `demo@submitsafe.in` / `Demo@123`. Seed data includes six named demo home loan products, 16 fictional schemes and eight fictional agents. Seeding is idempotent and never resets an existing user's password. Every catalog record has `dataMode=DEMO`. Loan rates and APR are percentages per year, processing fees are percentages of principal, money is INR, and tenure is years. Demo APR is a separately seeded illustration, not a computed quotation.
+Demo account: `demo@submitsafe.in` / `Demo@123`. Seed data includes six named demo home loan products, three fictional education loan products, 16 fictional schemes and eight fictional agents. Seeding is idempotent and never resets an existing user's password. Every catalog record has `dataMode=DEMO`. Loan rates and APR are percentages per year, processing fees are percentages of principal, money is INR, and tenure is years. Demo APR is a separately seeded illustration, not a computed quotation.
 
 ## Persist using MongoDB
 
@@ -44,7 +44,7 @@ Public endpoints:
 | POST | `/api/auth/login` | `email`, `password`; returns `user`, `token` |
 | POST | `/api/auth/send-otp` | `phone`; returns `challengeId`, 300-second expiry |
 | POST | `/api/auth/verify-otp` | `phone`, `challengeId`, `otp`; MOCK OTP is `123456` |
-| GET | `/api/loans` | `{data, count}` |
+| GET | `/api/loans` | `{data, count}`; defaults HOME, `?loanType=EDUCATION` or `ALL` |
 | GET | `/api/loans/:id` | `{data}` |
 | POST | `/api/loans/match` | Match profile below; `{data}` sorted by score |
 | POST | `/api/loans/compare` | `{loanProductIds: [id, id], profile: <match profile>}`; 2–6 unique products |
@@ -59,6 +59,8 @@ Protected endpoints:
 | Method | Path | Body / result |
 | --- | --- | --- |
 | GET | `/api/user/me` | `{user}`; excludes password hash |
+| PATCH | `/api/user/me` | `{name, profile}`; name/DOB changes invalidate document analyses |
+| GET | `/api/documents/:id` | Owned document metadata and persisted analysis |
 | POST | `/api/documents/upload` | Multipart `file` and `documentType`; `{document}` |
 | GET | `/api/documents` | Current user's document metadata |
 | POST | `/api/documents/:id/analyze` | `{consentId}`; `{analysis}` |
@@ -66,7 +68,7 @@ Protected endpoints:
 | POST | `/api/consents` | `purpose`, `documentIds`, `sharedWith`, `version` |
 | GET | `/api/consents` | Current user's consents, including revoked ones |
 | PATCH | `/api/consents/:id/revoke` | Revoke consent; no body required |
-| POST | `/api/applications` | `loanProductId`, `loanType: "HOME"`, `loanAmount`, `tenure`, optional `consentId` |
+| POST | `/api/applications` | `loanProductId`, `loanType: "HOME"` or `"EDUCATION"`, `loanAmount`, `tenure`, optional `consentId` |
 | GET | `/api/applications` | Current user's applications |
 | GET | `/api/applications/:id` | `{application}` |
 | PATCH | `/api/applications/:id/status` | `status`, optional `consentId` |
@@ -74,7 +76,7 @@ Protected endpoints:
 
 Registration accepts `profile.dob` as `YYYY-MM-DD`, `profile.city`, `profile.employmentType` and `profile.monthlyIncome`. Clients cannot choose a privileged role. OTP challenges have a five-minute expiry, 60-second resend cooldown, five attempts and single use. Completing a MOCK OTP does not create a session or verify real phone ownership.
 
-Loan match profile:
+Loan match profile (`loanType` defaults to `HOME`; send `EDUCATION` for education products):
 
 ```json
 {
@@ -97,16 +99,16 @@ Scoring uses income 30, age including maturity 15, amount/tenure limits 20, cred
 ## Documents and consent workflow
 
 1. Register/login with a profile name and DOB.
-2. Upload a PDF, PNG, JPG or JPEG. `documentType` is `AADHAAR`, `PAN`, `SALARY_SLIP` or `BANK_STATEMENT`. The default limit is 10 MiB, configurable through `MAX_UPLOAD_MB` (1–25). MIME, file signature and extension must agree. Files receive random UUID names and private filesystem permissions. The API never returns storage filenames or server paths and never serves uploads publicly.
+2. Upload a PDF, PNG, JPG or JPEG. `documentType` is `AADHAAR`, `PAN`, `DRIVING_LICENCE`, `SALARY_SLIP`, `BANK_STATEMENT`, `ADMISSION_LETTER` or `FEE_SCHEDULE`. The default limit is 10 MiB, configurable through `MAX_UPLOAD_MB` (1–25). MIME, file signature and extension must agree. Files receive random UUID names and private filesystem permissions. The API never returns storage filenames or server paths and never serves uploads publicly.
 3. Create consent: `{"purpose":"DOCUMENT_ANALYSIS","documentIds":["<document ID>"],"sharedWith":"SubmitSafe","version":"1.0"}`.
 4. Analyze using that consent ID. Consent must be active, owned by the same user, and include the document. It is checked again after OCR before saving results.
-5. Read aggregate readiness. The demo checklist requires all four document types. It scores uploads, readability, name/profile match, detected format and coverage equally. Uploading duplicates cannot increase scores beyond 100. `Ready` also requires a passing analysis for every required type.
+5. Read aggregate readiness. The legacy HOME checklist requires the original four document types. Education uses the configured mappings documented in [the Education Loan demo guide](EDUCATION_DEMO.md). It scores uploads, readability, name/profile match, detected format and coverage equally. Uploading duplicates cannot increase scores beyond 100. `Ready` also requires a passing analysis for every required type.
 
 Local image OCR uses Tesseract.js and English language data bundled through `@tesseract.js-data/eng`; there are no runtime language-data downloads. Set `LOCAL_OCR_ENABLED=false` to require manual image review. Searchable PDFs use local PDF.js text extraction (first 30 pages, at most 200,000 text characters). Scanned PDFs require manual review or a PNG/JPEG upload. OCR image recognition times out after 30 seconds. OCR is heuristic: multilingual text, rotated scans, complex layouts and unusual dates may need manual review.
 
 Analysis detects identity markers, masked Aadhaar (`XXXX XXXX 1234`) or PAN (`ABCDE****F`) patterns, profile-name and DOB consistency. Salary results include employee/employer/month detection and gross/net salary if found. Bank results include bank/account-holder/period detection and approximate months covered. Three months of bank coverage are expected. No bank underwriting is performed. Text-PDF confidence is a fixed extraction heuristic of 90; image confidence comes from Tesseract and neither is an authentication probability.
 
-Extracted raw OCR text, full government identifiers, names and dates of birth are not persisted in analysis or audit records. The original uploaded file is retained privately for analysis and can itself contain sensitive information; this is local storage, with no encryption-at-rest or automatic retention/deletion policy implemented. Use synthetic documents in the demo. Metadata filenames have Aadhaar/PAN-like strings redacted. Analyses return `passed`, `warning`, `failed` or `manual_review` with `verificationMode=SANDBOX_DOCUMENT_CHECK` and:
+Raw OCR text and full government identifiers are not persisted in analysis or audit records. Normalized names, dates of birth, addresses and useful document fields are now persisted in ownership-scoped analysis records for consistency checks; identifiers remain masked. Audit records contain no extracted fields. The original uploaded file is retained privately for analysis and can itself contain sensitive information; this is local storage, with no encryption-at-rest or automatic retention/deletion policy implemented. Use synthetic documents in the demo. Metadata filenames have Aadhaar/PAN-like strings redacted. Analyses return `passed`, `warning`, `failed` or `manual_review` with `verificationMode=SANDBOX_DOCUMENT_CHECK` and:
 
 > This result assesses document readiness and does not constitute UIDAI authentication.
 
@@ -114,7 +116,7 @@ Supported consent purposes: `DOCUMENT_ANALYSIS`, `LENDER_DATA_SHARE`, `AGENT_ASS
 
 ## Applications and assistance
 
-Applications start in `Draft` with a unique `SS-HOME-YYYY-12345` code. Allowed transitions:
+Applications start in `Draft` with a unique `SS-HOME-YYYY-12345` or `SS-EDUCATION-YYYY-12345` code. Allowed transitions:
 
 ```text
 Draft -> Documents Pending or Ready
@@ -155,3 +157,11 @@ npm test
 ```
 
 Tests exercise real local Tesseract image extraction and cover health, registration/login, OTP/replay, matching/comparison, PDF uploads/extraction, consent and revocation, aggregate readiness, catalogs, agent requests, application transitions, ownership isolation, upload size/signature validation, EMI and LIVE provider failures. A local MongoDB test can be enabled with the dedicated `TEST_MONGODB_URI` above; it inserts a test user and removes only that record. Tests need permission to bind temporary local HTTP ports. `npm run seed` is also a standalone smoke check.
+
+## Education evidence contract
+
+`GET /api/documents/readiness?loanType=EDUCATION` returns `mappings`, `consistency`, `finalState`, `requirementsVersion` and legacy `status`/`overallScore` fields. Add `productId` to use a selected product; the server derives the loan type from the product and rejects contradictory types. Application transitions use the same service with the persisted product ID. General education identity accepts Aadhaar or DL; a product can require a particular type. Latest upload per type wins.
+
+Each analysis has `evidence.recognition`, `extraction`, `fields`, `sourceVerification`, `consistency` and `provenance`. Source statuses are SOURCE_VERIFIED, SOURCE_NOT_VERIFIED, VERIFICATION_FAILED and NOT_AVAILABLE. Local extraction only returns SOURCE_NOT_VERIFIED for identity and NOT_AVAILABLE for other documents. No configured adapter returns SOURCE_VERIFIED. Recognition and OCR do not authenticate a QR code or an authority. PAN whitespace is removed and case normalized before format validation; only the masked result is retained. DL extraction currently supports labeled values and a common two-letter/13-digit format; other layouts require review.
+
+Education source, mapping and consistency tests include possible middle-name variations, mismatched DOB, missing evidence, bad replacements, profile correction and product-specific requirements. No human-review override is implemented: replace/correct evidence and recheck.

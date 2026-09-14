@@ -19,6 +19,19 @@ export function authController(store, config) {
       await audit(store, user._id, 'LOGIN');
       res.json({ user: publicUser(user), token: signToken(user, config) });
     },
+    updateProfile: async (req, res) => {
+      const user = await store.update('User', req.user._id, { name: req.body.name, profile: { ...req.user.profile, ...req.body.profile } });
+      // Legacy per-document scores were computed against the old profile. Recheck explicitly.
+      if (user.name !== req.user.name || user.profile.dob !== req.user.profile?.dob) {
+        for (const doc of await store.find('Document', { userId: req.user._id })) {
+          const analysis = await store.one('DocumentAnalysis', { documentId: doc._id });
+          if (analysis) await store.remove('DocumentAnalysis', analysis._id);
+          await store.update('Document', doc._id, { status: 'uploaded' });
+        }
+      }
+      await audit(store, req.user._id, 'PROFILE_UPDATED', req.user._id);
+      res.json({ user: publicUser(user) });
+    },
     me: async (req, res) => res.json({ user: publicUser(req.user) }),
     sendOtp: async (req, res) => {
       if (config.appMode !== 'MOCK') throw new ProviderNotConfiguredError('SMSProvider');

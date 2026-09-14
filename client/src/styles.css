@@ -19,3 +19,16 @@
 .hero-copy>p{color:#697660}.hero .safe-note{color:#748266;font-size:12px}.hero-actions .button{font-size:14px}.trust-strip>div{font-size:13px}.lender-strip>small{font-size:10px;color:#7b876f}.how-grid p{font-size:13px;color:#77846a}.how-grid h3{font-size:17px}.feature-copy>p{font-size:14px;color:#738366}.feature-copy>small{font-size:11px;color:#748365}.feature-copy>.button,.scheme-teaser>.button,.closing-cta>.button{font-size:13px}.scheme-teaser p{font-size:13px;color:#778669}.footer-top p{font-size:12px;color:#758467}.footer-top>div>a:not(.logo){font-size:12px;color:#748366}.footer-top h3{font-size:12px}.footer-bottom{font-size:11px;color:#778669}.desktop-nav a{font-size:14px}.dashboard-link{font-size:13px}.nav-login{font-size:13px}.demo-banner{font-size:12px}
 @media(max-width:650px){.demo-banner{font-size:10px}.demo-banner strong{font-size:11px}.hero .safe-note{font-size:11px}.hero-actions .button{font-size:12px}.trust-strip>div{font-size:11px}.how-grid h3{font-size:15px}.how-grid p{font-size:12px}.feature-copy>p{font-size:13px}.feature-copy>small{font-size:10px}.footer-top>div:first-child>p{font-size:10px}.footer-bottom{font-size:10px}.steps>li small{font-size:9px}.page .eyebrow,.wizard-shell .eyebrow{font-size:9px}.choice-card>small{font-size:11px}.field small{font-size:11px}.page .loan-metrics>div>span{font-size:11px}.page .document-row>.badge{font-size:9px}.page .document-row small{font-size:11px}.page .scheme-card .actions>.button{font-size:12px}.page .scheme-reason{font-size:12px!important}.page .consent-check{font-size:12px}.page .match-mini>span{font-size:9px}.page .sandbox-note{font-size:11px}}
 body{-webkit-font-smoothing:antialiased}.hero h1>span{margin-left:.04em}
+
+/* Evidence uses the existing cards and responsive page layout. */
+.evidence-mappings { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.evidence-mapping h2 { font-size: 20px; }
+.evidence-mapping .section-heading { align-items: flex-start; flex-wrap: wrap; gap: 12px; }
+.evidence-mapping .badge { white-space: normal; }
+.mapping-source { display: flex; flex-wrap: wrap; gap: 8px 16px; padding: 12px 0; font-size: 13px; }
+.mapping-source strong, .evidence-details strong { overflow-wrap: anywhere; }
+.consistency-row { padding: 14px 0; border-bottom: 1px solid var(--line, #e5e8e4); }
+.consistency-row .badge { margin-left: 10px; }
+.consistency-row p { margin-bottom: 0; }
+.profile-edit { margin-top: 24px; }
+@media (max-width: 700px) { .evidence-mappings { grid-template-columns: 1fr; } .evidence-details .detail-row { flex-wrap: wrap; gap: 8px; } }

@@ -40,7 +40,7 @@ PORT=5055 FRONTEND_PORT=5175 FRONTEND_URL=http://localhost:5175 VITE_API_URL=htt
 
 Then open `http://localhost:5175`. Environment variables must agree on the backend origin and API port. `FRONTEND_PORT` configures Vite; it is not a backend setting. Command-line environment values take precedence over the example files.
 
-The default backend is MOCK with ephemeral memory storage. Backend startup seeds six loan products, 16 schemes, eight agents, and `demo@submitsafe.in` / `Demo@123`. Restarting a MEMORY backend clears new accounts and applications. See `BACKEND_SETUP.md` for MongoDB persistence.
+The default backend is MOCK with ephemeral memory storage. Backend startup seeds six home and three education products, 16 schemes, eight agents, and `demo@submitsafe.in` / `Demo@123`. Restarting a MEMORY backend clears new accounts and applications. See `BACKEND_SETUP.md` for MongoDB persistence.
 
 ## Build and test
 
@@ -92,7 +92,7 @@ Protected pages return users to their original destination after sign in. Every 
 
 Scores, EMI estimates, catalogs, analyses, readiness and application codes come from the API. The client does not recreate the backend's scoring or underwriting logic. There are no static fallback records: an unreachable API produces an honest retry state.
 
-JWTs and form progress are stored in this tab's `sessionStorage`. Signing out clears account/form state. Saved schemes are a local session bookmark because there is no saved-scheme endpoint. Backend results are fetched again on page load. Raw document text and complete identifiers are not placed in browser storage or displayed. Stored identifiers use masked forms. Uploaded document contents are never rendered as previews.
+JWTs and form progress are stored in this tab's `sessionStorage`. Signing out clears account/form state. Saved schemes are a local session bookmark because there is no saved-scheme endpoint. Backend results are fetched again on page load. Raw document text and complete identifiers are not placed in browser storage or displayed. Normalized names, DOB, addresses and fields are shown in ownership-scoped document detail and retained in backend analysis for comparison. Stored identifiers use masked forms. Uploaded document contents are never rendered as previews.
 
 ## Full demo journey
 
@@ -108,11 +108,15 @@ JWTs and form progress are stored in this tab's `sessionStorage`. Signing out cl
 
 ## Backend limits represented honestly
 
-- Only home loans exist. Personal, education and car pages explain availability and link to the supported home-loan flow; they never relabel home-loan data.
-- The backend accepts one salary slip and four total document types. Additional slips and employment proof are not fabricated as supported requirements.
+- Home and education loans are supported. Personal and car remain unavailable. See [the Education Loan demo guide](EDUCATION_DEMO.md).
+- The backend accepts seven document types including DL, admission letter and fee schedule. Education maps configured requirements to evidence; HOME retains its original four-document checklist.
 - Schemes are fictional, with no ministry affiliation. State is collected for session context but not sent to the strict matching API, which supports age, income and occupation. Scheme document consent leads to the general readiness checklist, not an invented scheme-specific verifier.
 - Agent records have no real photo, verification, rating, review or experience fields. The UI uses labeled demo profiles, illustrative avatars and honest “not provided” details.
-- Profile editing and password reset are unavailable because the backend has no endpoints for them. Profile and consent pages explain what is supported.
+- Applicant name, DOB and city can be corrected in Profile. Name/DOB corrections invalidate existing analyses and require another consented check. Password reset remains unavailable.
 - OTP is a separate sandbox phone challenge, not a login mechanism or an account update.
 - Scanned PDFs may require manual review. Local image OCR and searchable-PDF extraction work through the existing backend. Analysis always states that it is not UIDAI authentication.
 - LIVE provider integrations remain unavailable until backend adapters are implemented. The UI does not invent endpoints or silently substitute demo verification.
+
+## Education demo
+
+Follow [EDUCATION_DEMO.md](EDUCATION_DEMO.md) for exact inputs, downloadable synthetic evidence, product comparison, the name-variation review scenario, disclosures and limitations. On this Mac the current ports are frontend 5173 and backend 5001; start with `PORT=5001 FRONTEND_PORT=5173 FRONTEND_URL=http://localhost:5173 VITE_API_URL=http://localhost:5001/api npm run dev:all` if neither service is already running. Default ports and environment configuration are unchanged.

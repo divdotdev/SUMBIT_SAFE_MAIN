@@ -1,6 +1,6 @@
 # SubmitSafe backend
 
-Backend lead implementation on `astra-2-backend`.
+Existing SubmitSafe application, continued on `astra-1-continue`.
 
 ```sh
 npm install
@@ -18,3 +18,5 @@ See [backend setup and API contracts](docs/BACKEND_SETUP.md) for MongoDB persist
 The React/Vite frontend is in `client/`. After `npm --prefix client install`, run `npm run dev:all` to start both services, or `npm run dev:web` alongside the existing backend. Run `npm run build` for production assets and `npm run test:frontend` for the complete browser journey.
 
 See [frontend setup, routes and integration guide](docs/FRONTEND_SETUP.md) for exact environment settings, alternate ports for this Mac, supported workflows and current backend limits.
+
+The primary Education Loan demo extends the existing architecture. Start with [the audit](docs/EDUCATION_AUDIT.md) and [the click-by-click Education Loan guide](docs/EDUCATION_DEMO.md). All configured education products, rates, schemes and downloadable documents are fictional demo data. OCR does not verify their source.
