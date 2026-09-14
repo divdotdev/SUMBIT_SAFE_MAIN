@@ -10,7 +10,11 @@
     "dev": "node --watch server/index.js",
     "start": "node server/index.js",
     "seed": "node server/seed/index.js",
-    "test": "node --test --test-concurrency=1 server/tests/*.test.js"
+    "test": "node --test --test-concurrency=1 server/tests/*.test.js",
+    "dev:web": "npm --prefix client run dev",
+    "dev:all": "node scripts/dev.mjs",
+    "build": "npm --prefix client run build",
+    "test:frontend": "npm --prefix client run test:e2e"
   },
   "dependencies": {
     "@tesseract.js-data/eng": "^1.0.0",

@@ -1,0 +1,60 @@
+const BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(/\/$/, '');
+export const session = {
+  get: () => sessionStorage.getItem('submitsafe.token'),
+  set: token => sessionStorage.setItem('submitsafe.token', token),
+  clear: () => sessionStorage.removeItem('submitsafe.token'),
+};
+export class ApiError extends Error {
+  constructor(message, status = 0, code = '') { super(message); this.status = status; this.code = code; }
+}
+async function request(path, { method = 'GET', body, signal } = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 45000);
+  const abort = () => controller.abort();
+  signal?.addEventListener('abort', abort, { once: true });
+  try {
+    const token = session.get();
+    const multipart = body instanceof FormData;
+    const response = await fetch(`${BASE_URL}${path}`, {
+      method, signal: controller.signal,
+      headers: { ...(body && !multipart ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: body ? (multipart ? body : JSON.stringify(body)) : undefined,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      if (response.status === 401 && !path.startsWith('/auth/')) { session.clear(); window.dispatchEvent(new Event('submitsafe:expired')); }
+      const friendly = response.status === 429 ? 'A few too many requests. Please take a moment and try again.'
+        : data.error?.code === 'ProviderNotConfiguredError' ? 'This service is not available yet. Please try the demo experience.'
+        : response.status >= 500 ? 'We couldn’t complete this right now. Please try again in a moment.'
+        : data.error?.fields?.map(field => field.message).join('. ') || data.error?.message || 'Something needs your attention. Please try again.';
+      throw new ApiError(friendly, response.status, data.error?.code);
+    }
+    return data;
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(error.name === 'AbortError' ? 'This is taking longer than expected. Please try again.' : 'We can’t reach SubmitSafe right now. Check your connection and try again.');
+  } finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); }
+}
+export const api = {
+  health: () => request('/health'),
+  login: body => request('/auth/login', { method: 'POST', body }),
+  register: body => request('/auth/register', { method: 'POST', body }),
+  me: () => request('/user/me'),
+  sendOtp: phone => request('/auth/send-otp', { method: 'POST', body: { phone } }),
+  verifyOtp: body => request('/auth/verify-otp', { method: 'POST', body }),
+  loans: () => request('/loans'), loan: id => request(`/loans/${id}`),
+  matchLoans: body => request('/loans/match', { method: 'POST', body }),
+  compareLoans: (loanProductIds, profile) => request('/loans/compare', { method: 'POST', body: { loanProductIds, profile } }),
+  documents: () => request('/documents'), readiness: () => request('/documents/readiness'),
+  upload: (file, documentType) => { const body = new FormData(); body.append('file', file); body.append('documentType', documentType); return request('/documents/upload', { method: 'POST', body }); },
+  analyze: (id, consentId) => request(`/documents/${id}/analyze`, { method: 'POST', body: { consentId } }),
+  consents: () => request('/consents'), consent: body => request('/consents', { method: 'POST', body }),
+  revokeConsent: id => request(`/consents/${id}/revoke`, { method: 'PATCH' }),
+  applications: () => request('/applications'), application: id => request(`/applications/${id}`),
+  createApplication: body => request('/applications', { method: 'POST', body }),
+  applicationStatus: (id, status, consentId) => request(`/applications/${id}/status`, { method: 'PATCH', body: { status, ...(consentId ? { consentId } : {}) } }),
+  schemes: () => request('/schemes'), scheme: id => request(`/schemes/${id}`),
+  matchSchemes: body => request('/schemes/match', { method: 'POST', body }),
+  agents: () => request('/agents'), agent: id => request(`/agents/${id}`),
+  requestAgent: (id, consentId) => request(`/agents/${id}/request`, { method: 'POST', body: { consentId } }),
+};
