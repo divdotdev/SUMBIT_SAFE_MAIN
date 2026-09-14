@@ -23,6 +23,7 @@ import { PrepareApplication, Applications, ApplicationDetail } from './pages/App
 import { Schemes, SchemeResults, SchemeDetail } from './pages/Schemes';
 import { Agents, AgentDetail } from './pages/Agents';
 import { Dashboard, Profile, Settings } from './pages/Account';
+import { OperationsLayout, AdminOverview, AdminRecords, CatalogAdmin, AgentAdmin, PartnerOverview, LeadDetail } from './pages/Operations';
 const secure=component=><Protected>{component}</Protected>;
 class ErrorBoundary extends React.Component {
   state={failed:false};static getDerivedStateFromError(){return{failed:true};}
@@ -30,6 +31,8 @@ class ErrorBoundary extends React.Component {
 }
 createRoot(document.getElementById('root')).render(<ErrorBoundary><BrowserRouter><AppProvider><Routes><Route element={<Layout/>}>
   <Route path="/" element={<Landing/>}/><Route path="/login" element={<Auth key="login"/>}/><Route path="/register" element={<Auth key="register" register/>}/>
+  <Route path="/admin" element={secure(<OperationsLayout role="admin"/>)}><Route index element={<AdminOverview/>}/>{['users','applications','documents','consents','audit'].map(section=><Route key={section} path={section} element={<AdminRecords section={section}/>}/>)}{['loans','schemes'].map(section=><Route key={section} path={section} element={<CatalogAdmin key={section} section={section}/>}/>)}<Route path="agents" element={<AgentAdmin/>}/></Route>
+  <Route path="/partner" element={secure(<OperationsLayout role="partner"/>)}><Route index element={<PartnerOverview/>}/><Route path="leads" element={<PartnerOverview leadsOnly/>}/><Route path="leads/:id" element={<LeadDetail/>}/></Route>
   <Route path="/dashboard" element={secure(<Dashboard/>)}/><Route path="/profile" element={secure(<Profile/>)}/><Route path="/settings" element={secure(<Settings/>)}/>
   <Route path="/loans" element={<LoanWizard key="all"/>}/>{['home','personal','education','car'].map(type=><Route key={type} path={`/loans/${type}`} element={<LoanWizard key={type} type={type}/>}/>)}
   <Route path="/loans/results" element={<LoanResults/>}/><Route path="/loans/compare" element={<LoanCompare/>}/><Route path="/loans/:id" element={<LoanDetail/>}/><Route path="/loans/:id/prepare" element={secure(<PrepareApplication/>)}/><Route path="/loans/:id/apply" element={secure(<PrepareApplication review/>)}/>

@@ -36,6 +36,13 @@ async function request(path, { method = 'GET', body, signal } = {}) {
   } finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); }
 }
 export const api = {
+  adminMetrics: () => request('/admin/metrics'),
+  adminRecords: section => request('/admin/' + section),
+  saveCatalog: (section, id, body) => request('/admin/' + section + (id ? '/' + id : ''), { method: id ? 'PUT' : 'POST', body }),
+  updateAgentAdmin: (id, body, isRequest) => request('/admin/' + (isRequest ? 'agent-requests' : 'agents') + '/' + id, { method:'PATCH', body }),
+  partnerLeads: () => request('/partner/leads'),
+  partnerLead: id => request('/partner/leads/' + id),
+  updateLead: (id, body) => request('/partner/leads/' + id, { method:'PATCH', body }),
   copilotContext: body => request('/copilot/context', { method: 'POST', body }),
   copilotChat: body => request('/copilot/chat', { method: 'POST', body }),
   health: () => request('/health'),
@@ -60,5 +67,5 @@ export const api = {
   schemes: () => request('/schemes'), scheme: id => request(`/schemes/${id}`),
   matchSchemes: body => request('/schemes/match', { method: 'POST', body }),
   agents: () => request('/agents'), agent: id => request(`/agents/${id}`),
-  requestAgent: (id, consentId) => request(`/agents/${id}/request`, { method: 'POST', body: { consentId } }),
+  requestAgent: (id, consentId, context = {}) => request(`/agents/${id}/request`, { method: 'POST', body: { consentId, ...context } }),
 };

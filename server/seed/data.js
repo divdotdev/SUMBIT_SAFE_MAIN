@@ -57,5 +57,12 @@ export async function seed(store) {
     name: 'Demo User', email: 'demo@submitsafe.in', passwordHash: await bcrypt.hash('Demo@123', 12), role: 'user',
     profile: { dob: '1995-01-01', city: 'Delhi', employmentType: 'salaried', monthlyIncome: 75000 },
   });
+  // Explicit local presentation identities only. Public registration cannot choose a role.
+  const homeProducts = (await store.find('LoanProduct')).filter(p => p.loanType === 'HOME' && p.dataMode === 'DEMO');
+  for (const identity of [
+    { name: 'Demo Administrator', email: 'admin@submitsafe.in', role: 'admin' },
+    { name: 'Demo Lender Partner', email: 'partner@submitsafe.in', role: 'partner', partnerProductIds: homeProducts.map(p => p._id) },
+    { name: 'Rahul Sharma', email: 'rahul@submitsafe.in', role: 'user', profile: { dob: '1998-06-15', city: 'Chandigarh', employmentType: 'salaried', monthlyIncome: 70000 } },
+  ]) if (!await store.one('User', { email: identity.email })) await store.create('User', { ...identity, passwordHash: await bcrypt.hash('Demo@123', 12) });
   return { lenders: lenders.length, schemes: schemes.length, agents: agents.length, demoUser: 'demo@submitsafe.in' };
 }

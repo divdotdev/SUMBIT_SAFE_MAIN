@@ -23,7 +23,7 @@ export function AppProvider({ children }) {
   useEffect(() => { refreshUser(); const expired = () => { logout(); setNotice('Your session has ended. Please sign in again.'); }; window.addEventListener('submitsafe:expired', expired); return () => window.removeEventListener('submitsafe:expired', expired); }, []);
   useEffect(() => { let active = true; const check = () => api.health().then(result => { if (active) setHealth(result); }).catch(() => { if (active) setHealth({ status: 'offline' }); }); check(); const timer = setInterval(check, 60000); return () => { active = false; clearInterval(timer); }; }, []);
   useEffect(() => { if (notice) { const timer = setTimeout(() => setNotice(''), 5000); return () => clearTimeout(timer); } }, [notice]);
-  const authenticate = response => { session.set(response.token); setUser(response.user); setAuthError(null); };
+  const authenticate = response => { if (user && user._id !== response.user._id) logout(); session.set(response.token); setUser(response.user); setAuthError(null); };
   return <Context.Provider value={{ user, loading, authError, refreshUser, health, authenticate, logout, notice, setNotice, loanProfile, setLoanProfile, compareIds, setCompareIds, selectedLoan, setSelectedLoan, schemeProfile, setSchemeProfile, savedScheme, setSavedScheme, analyses, setAnalyses }}>{children}</Context.Provider>;
 }
 export const useApp = () => useContext(Context);

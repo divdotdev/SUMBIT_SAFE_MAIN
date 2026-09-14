@@ -8,7 +8,7 @@ export function Logo() { return <Link className="logo" to="/" aria-label="Submit
 export default function Layout() {
   const { health, user, logout, notice } = useApp(); const [menu, setMenu] = useState(false); const location = useLocation();
   useEffect(() => { setMenu(false); window.scrollTo({ top: 0, behavior: 'instant' }); document.title = `${location.pathname === '/' ? 'Know before you submit.' : location.pathname.split('/')[1].replace(/^./, c => c.toUpperCase())} — SubmitSafe`; }, [location.pathname]);
-  const links = [['/loans', 'Loans'], ['/schemes', 'Schemes'], ['/documents', 'Documents'], ['/applications', 'Applications']];
+  const links = [['/loans', 'Loans'], ['/schemes', 'Schemes'], ['/documents', 'Documents'], ['/applications', 'Applications'], ...(user?.role==='admin'?[['/admin','Admin']]:user?.role==='partner'?[['/partner','Partner']]:[])];
   return <>
     <a href="#main" className="skip-link">Skip to content</a>
     {health?.appMode === 'MOCK' && <div className="demo-banner"><span className="demo-dot"/><strong>SubmitSafe Demo</strong><span className="banner-divider">—</span> eligibility, lender data and verification results shown here are for demonstration.</div>}
