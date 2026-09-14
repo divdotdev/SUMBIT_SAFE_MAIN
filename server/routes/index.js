@@ -1,0 +1,47 @@
+import { Router } from 'express';
+import { rateLimit } from 'express-rate-limit';
+import { z, id, safeText, phone, profile, income, matchInput, validate, validateId } from '../middleware/validation.js';
+import { auth } from '../middleware/auth.js';
+import { createUpload } from '../middleware/upload.js';
+import { statuses, purposes } from '../models/index.js';
+import { authController } from '../controllers/auth.js';
+import { catalogController } from '../controllers/catalog.js';
+import { documentsController } from '../controllers/documents.js';
+import { workflowsController } from '../controllers/workflows.js';
+const email = z.email().max(254).transform(v => v.toLowerCase());
+const limiter = (limit, windowMs = 900000) => rateLimit({ windowMs, limit, standardHeaders: 'draft-8', legacyHeaders: false,
+  message: { error: { code: 'RATE_LIMITED', message: 'Too many requests; try again later' } } });
+export function createRoutes(store, config, providers) {
+  const router = Router(); const secured = auth(store, config);
+  const a = authController(store, config); const c = catalogController(store); const d = documentsController(store, config, providers); const w = workflowsController(store, config, providers);
+  router.get('/health', (req, res) => { const databaseStatus = store.getStatus(); res.status(databaseStatus === 'disconnected' ? 503 : 200).json({ status: databaseStatus === 'disconnected' ? 'degraded' : 'ok', appMode: config.appMode, databaseStatus }); });
+  router.use(limiter(300));
+  router.use('/auth', limiter(30));
+  router.post('/auth/register', validate(z.object({ name: safeText, email, phone: phone.optional(), password: z.string().min(8).max(72).refine(v => Buffer.byteLength(v) <= 72, 'Password exceeds bcrypt byte limit'), profile: profile.optional() }).strict()), a.register);
+  router.post('/auth/login', validate(z.object({ email, password: z.string().min(1).max(72) }).strict()), a.login);
+  router.post('/auth/send-otp', limiter(5), validate(z.object({ phone }).strict()), a.sendOtp);
+  router.post('/auth/verify-otp', validate(z.object({ phone, challengeId: z.uuid(), otp: z.string().regex(/^\d{6}$/) }).strict()), a.verifyOtp);
+  router.get('/user/me', secured, a.me);
+  router.get('/loans', c.loans);
+  router.post('/loans/match', validate(matchInput), c.matchLoans);
+  router.post('/loans/compare', validate(z.object({ loanProductIds: z.array(id).min(2).max(6).refine(v => new Set(v).size === v.length, 'Choose unique products'), profile: matchInput }).strict()), c.compareLoans);
+  router.get('/loans/:id', validateId, c.loan);
+  router.get('/schemes', c.schemes);
+  router.post('/schemes/match', validate(z.object({ age: z.number().int().min(0).max(120), monthlyIncome: income.optional(), annualIncome: income.optional(), employmentType: profile.shape.employmentType.unwrap(), city: safeText.optional() }).strict().refine(v => v.monthlyIncome !== undefined || v.annualIncome !== undefined, 'Provide income')), c.matchSchemes);
+  router.get('/schemes/:id', validateId, c.scheme);
+  router.get('/agents', c.agents);
+  router.get('/agents/:id', validateId, c.agent);
+  router.post('/agents/:id/request', secured, validateId, validate(z.object({ consentId: id }).strict()), w.requestAgent);
+  router.get('/documents', secured, d.list);
+  router.get('/documents/readiness', secured, d.readiness);
+  router.post('/documents/upload', secured, limiter(20), createUpload(config), d.upload);
+  router.post('/documents/:id/analyze', secured, validateId, limiter(30), validate(z.object({ consentId: id }).strict()), d.analyze);
+  router.post('/consents', secured, validate(z.object({ purpose: z.enum(purposes), documentIds: z.array(id).max(30).default([]), sharedWith: safeText.default('SubmitSafe'), version: z.literal('1.0').default('1.0') }).strict().refine(v => !['DOCUMENT_ANALYSIS', 'SCHEME_DOCUMENT_CHECK'].includes(v.purpose) || v.documentIds.length > 0, 'Document consent requires documentIds')), w.consent);
+  router.get('/consents', secured, w.consents);
+  router.patch('/consents/:id/revoke', secured, validateId, w.revokeConsent);
+  router.post('/applications', secured, validate(z.object({ loanProductId: id, loanType: z.literal('HOME'), loanAmount: z.number().positive().max(1e10), tenure: z.number().int().min(1).max(40), consentId: id.optional() }).strict()), w.createApplication);
+  router.get('/applications', secured, w.applications);
+  router.get('/applications/:id', secured, validateId, w.application);
+  router.patch('/applications/:id/status', secured, validateId, validate(z.object({ status: z.enum(statuses), consentId: id.optional() }).strict()), w.applicationStatus);
+  return router;
+}
