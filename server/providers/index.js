@@ -8,9 +8,10 @@ import { MockCreditProvider } from './credit/MockCreditProvider.js';
 import { RealCreditProvider } from './credit/RealCreditProvider.js';
 import { MockLenderProvider } from './lender/MockLenderProvider.js';
 import { PartnerLenderProvider } from './lender/PartnerLenderProvider.js';
+import { createAIProvider } from './ai/index.js';
 export function createProviders(config) {
   const mock = config.appMode === 'MOCK';
-  return { document: mock ? new MockDocumentProvider(config) : new SignzyDocumentProvider(),
+  return { ai: createAIProvider(config.ai), document: mock ? new MockDocumentProvider(config) : new SignzyDocumentProvider(),
     identity: mock ? new MockIdentityProvider() : new SignzyIdentityProvider(),
     financial: mock ? new MockFinancialProvider() : new PerfiosFinancialProvider(),
     credit: mock ? new MockCreditProvider() : new RealCreditProvider(),

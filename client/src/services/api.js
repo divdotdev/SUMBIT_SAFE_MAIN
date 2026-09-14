@@ -36,6 +36,8 @@ async function request(path, { method = 'GET', body, signal } = {}) {
   } finally { clearTimeout(timer); signal?.removeEventListener('abort', abort); }
 }
 export const api = {
+  copilotContext: body => request('/copilot/context', { method: 'POST', body }),
+  copilotChat: body => request('/copilot/chat', { method: 'POST', body }),
   health: () => request('/health'),
   login: body => request('/auth/login', { method: 'POST', body }),
   register: body => request('/auth/register', { method: 'POST', body }),

@@ -20,3 +20,5 @@ The React/Vite frontend is in `client/`. After `npm --prefix client install`, ru
 See [frontend setup, routes and integration guide](docs/FRONTEND_SETUP.md) for exact environment settings, alternate ports for this Mac, supported workflows and current backend limits.
 
 The primary Education Loan demo extends the existing architecture. Start with [the audit](docs/EDUCATION_AUDIT.md) and [the click-by-click Education Loan guide](docs/EDUCATION_DEMO.md). All configured education products, rates, schemes and downloadable documents are fictional demo data. OCR does not verify their source.
+
+The application-aware Copilot reuses these readiness and matching rules. See [Copilot setup, grounding, privacy boundaries and demo](docs/COPILOT.md). AI defaults to unavailable; `AI_PROVIDER=MOCK` enables the explicitly labeled demo. `OPENAI` and `GROQ` enable live models with their respective server-side API keys; Groq defaults to `openai/gpt-oss-20b`.

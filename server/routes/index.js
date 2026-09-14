@@ -8,12 +8,18 @@ import { authController } from '../controllers/auth.js';
 import { catalogController } from '../controllers/catalog.js';
 import { documentsController } from '../controllers/documents.js';
 import { workflowsController } from '../controllers/workflows.js';
+import { copilotController } from '../controllers/copilot.js';
+import { createMatchContextCache } from '../services/copilotContext.js';
 const email = z.email().max(254).transform(v => v.toLowerCase());
 const limiter = (limit, windowMs = 900000) => rateLimit({ windowMs, limit, standardHeaders: 'draft-8', legacyHeaders: false,
   message: { error: { code: 'RATE_LIMITED', message: 'Too many requests; try again later' } } });
 export function createRoutes(store, config, providers) {
   const router = Router(); const secured = auth(store, config);
-  const a = authController(store, config); const c = catalogController(store); const d = documentsController(store, config, providers); const w = workflowsController(store, config, providers);
+  const optionalAuth = (req, res, next) => req.headers.authorization ? secured(req, res, next) : next();
+  const matchCache = createMatchContextCache();
+  const copilot = copilotController(store, providers.ai, matchCache);
+  const contextInput = z.object({ applicationId: id.optional(), productId: id.optional(), loanType: z.enum(['HOME', 'EDUCATION']).optional(), comparisonProductIds: z.array(id).min(2).max(3).refine(v => new Set(v).size === v.length).optional(), schemeId: id.optional() }).strict();
+  const a = authController(store, config); const c = catalogController(store, matchCache); const d = documentsController(store, config, providers); const w = workflowsController(store, config, providers);
   router.get('/health', (req, res) => { const databaseStatus = store.getStatus(); res.status(databaseStatus === 'disconnected' ? 503 : 200).json({ status: databaseStatus === 'disconnected' ? 'degraded' : 'ok', appMode: config.appMode, databaseStatus }); });
   router.use(limiter(300));
   router.use('/auth', limiter(30));
@@ -24,11 +30,13 @@ export function createRoutes(store, config, providers) {
   router.get('/user/me', secured, a.me);
   router.patch('/user/me', secured, validate(z.object({ name: safeText, profile }).strict()), a.updateProfile);
   router.get('/loans', c.loans);
-  router.post('/loans/match', validate(matchInput), c.matchLoans);
-  router.post('/loans/compare', validate(z.object({ loanProductIds: z.array(id).min(2).max(6).refine(v => new Set(v).size === v.length, 'Choose unique products'), profile: matchInput }).strict()), c.compareLoans);
+  router.post('/loans/match', optionalAuth, validate(matchInput), c.matchLoans);
+  router.post('/loans/compare', optionalAuth, validate(z.object({ loanProductIds: z.array(id).min(2).max(6).refine(v => new Set(v).size === v.length, 'Choose unique products'), profile: matchInput }).strict()), c.compareLoans);
   router.get('/loans/:id', validateId, c.loan);
   router.get('/schemes', c.schemes);
-  router.post('/schemes/match', validate(z.object({ loanType: z.enum(['HOME', 'EDUCATION']).optional(), age: z.number().int().min(0).max(120), monthlyIncome: income.optional(), annualIncome: income.optional(), employmentType: profile.shape.employmentType.unwrap(), city: safeText.optional() }).strict().refine(v => v.monthlyIncome !== undefined || v.annualIncome !== undefined, 'Provide income')), c.matchSchemes);
+  router.post('/schemes/match', optionalAuth, validate(z.object({ loanType: z.enum(['HOME', 'EDUCATION']).optional(), age: z.number().int().min(0).max(120), monthlyIncome: income.optional(), annualIncome: income.optional(), employmentType: profile.shape.employmentType.unwrap(), city: safeText.optional() }).strict().refine(v => v.monthlyIncome !== undefined || v.annualIncome !== undefined, 'Provide income')), c.matchSchemes);
+  router.post('/copilot/context', secured, validate(contextInput), copilot.context);
+  router.post('/copilot/chat', secured, limiter(30), validate(contextInput.extend({ message: z.string().trim().min(1).max(1200) })), copilot.chat);
   router.get('/schemes/:id', validateId, c.scheme);
   router.get('/agents', c.agents);
   router.get('/agents/:id', validateId, c.agent);

@@ -20,6 +20,14 @@ test('education evidence journey, specific product, variation review and lender-
   await page.getByRole('radio',{name:/750\+/}).check();await page.getByRole('button',{name:'View requirements',exact:true}).click();
   await expect(page.getByRole('heading',{name:'NOT READY',exact:true})).toBeVisible();
   await expect(page.getByRole('heading',{name:'Applicant income evidence',exact:true})).toBeVisible();
+  const copilot = page.getByRole('complementary', {name:'SUBMIT-SAFE Copilot'});
+  await page.getByRole('button',{name:'Copilot',exact:true}).click();
+  await expect(copilot).toContainText('DEMO/MOCK');
+  await copilot.getByRole('button',{name:'Why am I not ready?',exact:true}).click();
+  await expect(copilot.getByRole('region',{name:'Copilot response'})).toContainText('NOT READY');
+  await copilot.getByRole('button',{name:'What should I fix next?',exact:true}).click();
+  await expect(copilot.getByRole('region',{name:'Copilot response'})).toContainText('priority order');
+  await copilot.getByRole('button',{name:'Close Copilot'}).click();
   async function upload(type,lines){
     await page.goto(`/documents/upload?type=${type}`);
     await page.getByLabel('Choose document',{exact:true}).setInputFiles({name:`${type}.pdf`,mimeType:'application/pdf',buffer:pdf(lines)});
@@ -50,10 +58,23 @@ test('education evidence journey, specific product, variation review and lender-
   await upload('DRIVING_LICENCE',educationDocumentLines.DRIVING_LICENCE.map(s=>s.replace('Riya Sharma','Riya S Sharma')));
   await page.goto('/documents');await expect(page.getByRole('heading',{name:'REVIEW REQUIRED',exact:true})).toBeVisible();
   await expect(page.getByText('POSSIBLE_MATCH',{exact:true}).first()).toBeVisible();
+  await page.getByRole('button',{name:'Copilot',exact:true}).click();
+  await copilot.getByRole('button',{name:'What information conflicts?',exact:true}).click();
+  await expect(copilot.getByRole('region',{name:'Copilot response'})).toContainText('POSSIBLE_MATCH');
+  await copilot.getByRole('button',{name:'Close Copilot'}).click();
   if(process.env.SCREENSHOT_DIR)await page.screenshot({path:`${process.env.SCREENSHOT_DIR}/education-review-desktop.png`,fullPage:true,animations:'disabled'});
   await upload('DRIVING_LICENCE',educationDocumentLines.DRIVING_LICENCE);
   await page.reload();await expect(page.getByText('SOURCE_NOT_VERIFIED',{exact:true})).toBeVisible();
   await page.goto('/documents');await expect(page.getByRole('heading',{name:'READY FOR LENDER REVIEW',exact:true})).toBeVisible();
+  await page.setViewportSize({width:390,height:844});
+  await page.getByRole('button',{name:'Copilot',exact:true}).click();
+  await copilot.getByRole('button',{name:'Why am I not ready?',exact:true}).click();
+  await expect(copilot.getByRole('region',{name:'Copilot response'})).toContainText('READY FOR LENDER REVIEW');
+  await expect(copilot).toContainText('7 requirements satisfied');
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+  if(process.env.SCREENSHOT_DIR)await page.screenshot({path:`${process.env.SCREENSHOT_DIR}/copilot-ready-mobile.png`,animations:'disabled'});
+  await copilot.getByRole('button',{name:'Close Copilot'}).click();
+  await page.setViewportSize({width:1440,height:1000});
   await page.getByRole('link',{name:'Review selected product',exact:true}).click();
   await page.getByRole('link',{name:/Apply Directly/}).click();
   await page.getByRole('checkbox',{name:/I consent to sharing my application/}).check();

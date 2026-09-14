@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { ShieldCheck, Menu, X, UserRound, ArrowUpRight, Check } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Button } from './UI';
+import Copilot from './Copilot';
 export function Logo() { return <Link className="logo" to="/" aria-label="SubmitSafe home"><span className="logo-mark"><ShieldCheck size={24}/></span>Submit<span>Safe</span><i/></Link>; }
 export default function Layout() {
   const { health, user, logout, notice } = useApp(); const [menu, setMenu] = useState(false); const location = useLocation();
@@ -16,6 +17,7 @@ export default function Layout() {
       {menu && <nav id="mobile-nav" className="mobile-nav" aria-label="Mobile navigation">{[...links, ['/dashboard', 'Dashboard'], ['/profile', 'Profile'], ['/settings', 'Settings'], ['/agents', 'Expert assistance']].map(([to, label]) => <NavLink key={to} to={to}>{label}</NavLink>)}{user ? <button onClick={logout}>Sign out</button> : <Link to="/login">Sign in</Link>}</nav>}
     </header>
     <main id="main"><Outlet/></main>
+    <Copilot/>
     <footer className="site-footer"><div className="footer-top"><div><Logo/><p>A little clarity.<br/>A more confident next step.</p></div><div><h3>Your next step</h3><Link to="/loans">Find a loan</Link><Link to="/schemes">Explore schemes</Link><Link to="/documents">Check documents</Link></div><div><h3>Here to help</h3><Link to="/agents">Expert assistance</Link><Link to="/settings">Privacy & consent</Link><Link to="/profile">Your profile</Link></div><div className="footer-promise"><ShieldCheck size={23}/><strong>Know before you submit.</strong><p>Find the right loan, prepare your documents, and apply with confidence.</p></div></div><div className="footer-bottom"><span>© {new Date().getFullYear()} SubmitSafe</span><span>Made for your next chapter.</span><span>Independent. Informative. On your side.</span></div></footer>
     {notice && <div className="toast" role="status"><Check size={18}/>{notice}</div>}
   </>;
