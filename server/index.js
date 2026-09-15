@@ -11,4 +11,4 @@ try {
   server.on('error', () => { console.error('HTTP server could not start. Check PORT availability.'); process.exit(1); });
   const shutdown = () => { const timeout = setTimeout(() => process.exit(1), 10000); timeout.unref(); server.close(async () => { await store.close(); process.exit(0); }); };
   process.once('SIGINT', shutdown); process.once('SIGTERM', shutdown);
-} catch { console.error('Backend startup failed. Check APP_MODE, database configuration and JWT_SECRET. Placeholder MongoDB credentials are not usable.'); process.exitCode = 1; }
+} catch (err) { console.error('Backend startup failed:', err); process.exitCode = 1; }

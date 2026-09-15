@@ -34,7 +34,7 @@ test('readiness masks identifiers, compares profile, and never exposes OCR text'
   assert.equal(redactIdentifiers('123456789012 ABCDE1234F'), 'XXXX XXXX 9012 ABCDE****F');
 });
 test('dummy Mongo URI is never contacted and LIVE requires a safe configuration', () => {
-  const dummy = { MONGODB_URI: 'mongodb://localhost:27017/submitsafe' };
+  const dummy = { MONGODB_URI: 'mongodb+srv://submitsafe_demo:DummyPassword123@cluster0.mongodb.net/submitsafe' };
   assert.equal(getConfig(dummy).databaseMode, 'MEMORY');
   assert.throws(() => getConfig({ ...dummy, MOCK_DATABASE: 'MONGODB' }));
   assert.throws(() => getConfig({ APP_MODE: 'LIVE' }));
