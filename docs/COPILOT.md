@@ -1,4 +1,18 @@
-# SUBMIT-SAFE Copilot
+# SUBMIT SARTHI
+
+## Voice and multilingual MVP
+
+The existing assistant panel is now named SUBMIT SARTHI. Its quick buttons remain suggestions: typed and spoken free-form questions use the same authenticated chat endpoint and configured model. The model interprets intent and selects grounded facts; server-controlled English/Hindi/Hinglish explanations prevent generated financial or verification claims from becoming application facts. MOCK remains explicitly a deterministic test/demo provider, not a language model. Provider credentials are required for live natural-language interpretation; this checkout currently defaults to DISABLED. Historical live checks below do not mean a key is present in a fresh checkout.
+
+The existing panel adds a microphone and a small English/हिंदी selector, remembered for the tab session. Recognition uses `SpeechRecognition`/`webkitSpeechRecognition` with `en-IN` or `hi-IN`. Final speech is shown in the text box and submitted automatically once recognition ends. Stop ends listening; closing the panel, signing out or changing application context aborts recognition and discards late results. Permission denial, unintelligible speech and unsupported browsers preserve typing. Browser speech services may process audio remotely; the panel explains this. Voice needs a supported browser and microphone access (usually HTTPS or localhost). No voice backend, dependencies, database fields, theme changes or read-aloud feature were added.
+
+Each answer includes a recorded-status explanation, a recommended next step and up to three context-dependent suggested questions. PAN readiness and issuing-source verification are distinct. No real authority verification is inferred from OCR. When a saved application exists and no explicit selector is supplied, the assistant uses the most recently created owned application. Otherwise it asks the user to select a loan context.
+
+Numeric lakh/crore/₹/INR questions can recompute a question-only amount scenario using the existing matching service and the user's recent authenticated matching inputs. This never changes the saved application or cached inputs. Without current matching inputs, the assistant asks the user to run matching while signed in. Disabled products are excluded from assistant recommendations. Loan details and rule-reason labels may retain English banking terms in Hindi/Hinglish answers.
+
+Validation: backend tests cover the requested English/Hindi/Hinglish questions, PAN source status, privacy, and an INR 10 lakh scenario without mutating the saved INR 25 lakh inputs. Browser tests simulate speech transcripts, `en-IN`/`hi-IN`, automatic send, stop, denied microphone permission, unavailable recognition and cancellation on close. These are simulated browser events; a real microphone/acoustic recognition check still requires a person with a supported browser. Live provider accuracy also requires credentials and a live check. Existing authentication, Education/Home documents, application, partner/admin and matching regression tests remain in the suite.
+
+Files for this increment: `client/src/components/Copilot.jsx`, `client/src/hooks/useSarthiVoice.js`, `client/src/styles.css`, `client/tests/copilot.spec.js`, `client/tests/education.spec.js`, `client/tests/sarthi.spec.js`, `server/controllers/copilot.js`, `server/providers/ai/index.js`, `server/services/copilotContext.js`, `server/services/sarthi.js`, `server/tests/sarthi.test.js`, and this document.
 
 Added incrementally on commit `418bdd3`. The existing OCR, evidence, readiness, matching, consent and application modules remain the source of truth. No new database models or dependencies were added.
 
