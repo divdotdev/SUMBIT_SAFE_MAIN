@@ -8,7 +8,7 @@ import { createProviders } from './providers/index.js';
 export function createApp({ config, store, providers = createProviders(config) }) {
   const app = express(); app.disable('x-powered-by');
   app.use(helmet());
-  app.use(cors({ origin(origin, cb) { cb(!origin || origin === config.frontendUrl ? null : new AppError(403, 'Origin is not allowed'), origin === config.frontendUrl); }, credentials: false }));
+  app.use(cors({ origin(origin, cb) { const allowed = !origin || config.frontendUrl === '*' || origin === config.frontendUrl; cb(allowed ? null : new AppError(403, 'Origin is not allowed'), allowed); }, credentials: false }));
   app.use(express.json({ limit: '64kb' }));
   app.use('/api', createRoutes(store, config, providers));
   // uploads are intentionally never mounted as a public static directory.
