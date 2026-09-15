@@ -1,3 +1,7 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import fs from 'node:fs';
+const clientDist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../client/dist');
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
@@ -11,6 +15,17 @@ export function createApp({ config, store, providers = createProviders(config) }
   app.use(cors({ origin(origin, cb) { const allowed = !origin || config.frontendUrl === '*' || origin === config.frontendUrl; cb(allowed ? null : new AppError(403, 'Origin is not allowed'), allowed); }, credentials: false }));
   app.use(express.json({ limit: '64kb' }));
   app.use('/api', createRoutes(store, config, providers));
+
+  if (fs.existsSync(clientDist)) {
+    app.use(express.static(clientDist));
+    app.use((req, res, next) => {
+      if (req.method === 'GET' && !req.path.startsWith('/api') && !req.path.startsWith('/uploads')) {
+        return res.sendFile(path.join(clientDist, 'index.html'));
+      }
+      next();
+    });
+  }
+
   // uploads are intentionally never mounted as a public static directory.
   app.use((req, res) => res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Endpoint not found' } }));
   app.use(errorHandler);
